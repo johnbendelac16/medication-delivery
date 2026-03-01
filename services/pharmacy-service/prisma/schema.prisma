@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Pharmacy {
+  id          String       @id @default(uuid())
+  name        String
+  address     String
+  phone       String
+  isActive    Boolean      @default(true)
+  medications Medication[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("pharmacies")
+}
+
+model Medication {
+  id                   String   @id @default(uuid())
+  pharmacyId           String
+  pharmacy             Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  name                 String
+  description          String?
+  unitPrice            Float
+  stock                Int      @default(0)
+  requiresPrescription Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("medications")
+}

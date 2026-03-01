@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DeliveryStatus {
+  ASSIGNED    // driver assigned to the order
+  PICKED_UP   // driver picked up from pharmacy
+  IN_TRANSIT  // en route to patient
+  DELIVERED   // delivered, signature collected
+  FAILED      // delivery failed (absent patient, etc.)
+}
+
+// One delivery per order
+model Delivery {
+  id           String         @id @default(uuid())
+  orderId      String         @unique // one delivery per order
+  driverId     String         // references User.id in auth-service
+  status       DeliveryStatus @default(ASSIGNED)
+  latitude     Float?         // last known driver latitude
+  longitude    Float?         // last known driver longitude
+  signatureUrl String?        // S3 URL of delivery signature
+  events       DeliveryEvent[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@map("deliveries")
+}
+
+// Append-only GPS and status history
+model DeliveryEvent {
+  id         String         @id @default(uuid())
+  deliveryId String
+  delivery   Delivery       @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  status     DeliveryStatus
+  latitude   Float?
+  longitude  Float?
+  note       String?
+  createdAt  DateTime       @default(now())
+
+  @@map("delivery_events")
+}

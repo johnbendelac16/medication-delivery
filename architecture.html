@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Medication Delivery — Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #070b14; --surface: #0d1424; --surface2: #111d30;
+      --border: #1a2840; --border2: #243550; --text: #cbd5e1;
+      --muted: #4a6080; --bright: #e2e8f0;
+      --blue: #0ea5e9; --purple: #8b5cf6; --green: #10b981;
+      --cyan: #06b6d4; --amber: #f59e0b; --pink: #ec4899;
+      --rabbit: #ff6b35;
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh; padding: 48px 32px;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(14,165,233,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(14,165,233,0.025) 1px, transparent 1px);
+      background-size: 32px 32px; pointer-events: none; z-index: 0;
+    }
+    .page { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; }
+
+    /* HEADER */
+    .header { margin-bottom: 48px; }
+    .header-tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--blue); letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px; }
+    .header-title { font-size: 32px; font-weight: 600; color: var(--bright); margin-bottom: 6px; }
+    .header-sub { font-size: 14px; color: var(--muted); }
+
+    /* LAYER LABEL */
+    .layer-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+    .layer-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    .section { margin-bottom: 8px; }
+
+    /* CLIENT */
+    .client-box { display: flex; justify-content: center; }
+    .client { background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; padding: 12px 48px; display: flex; align-items: center; gap: 12px; }
+    .client-icon { font-size: 18px; }
+    .client-label { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; color: var(--bright); }
+    .client-sub { font-size: 11px; color: var(--muted); }
+
+    /* CONNECTOR */
+    .connector { display: flex; justify-content: center; align-items: center; flex-direction: column; height: 40px; gap: 2px; }
+    .conn-line { width: 1px; flex: 1; background: var(--border2); }
+    .conn-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--muted); letter-spacing: 0.1em; background: var(--bg); padding: 0 6px; }
+    .conn-arrow { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--border2); }
+
+    /* GATEWAY */
+    .gateway-wrap { display: flex; justify-content: center; }
+    .gateway { background: var(--surface2); border: 1px solid var(--blue); border-radius: 14px; padding: 20px 40px; min-width: 380px; position: relative; box-shadow: 0 0 40px rgba(14,165,233,0.07); }
+    .gateway-badge { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); background: var(--blue); color: #000; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.15em; padding: 3px 12px; border-radius: 20px; }
+    .gateway-name { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; color: var(--blue); text-align: center; }
+    .gateway-port { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); text-align: center; margin-bottom: 12px; }
+    .gateway-features { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .gf-tag { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--blue); background: rgba(14,165,233,0.08); border: 1px solid rgba(14,165,233,0.2); padding: 3px 9px; border-radius: 20px; }
+
+    .fanout-svg { width: 100%; overflow: visible; display: block; }
+
+    /* SERVICES */
+    .services-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 8px; }
+    .svc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 14px; position: relative; }
+    .svc-status { position: absolute; top: -9px; right: 10px; font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 700; padding: 2px 7px; border-radius: 10px; letter-spacing: 0.08em; }
+    .status-done { background: var(--green); color: #000; }
+    .status-next { background: var(--amber); color: #000; }
+    .status-wip  { background: var(--border2); color: var(--muted); }
+    .svc-icon { font-size: 20px; margin-bottom: 8px; }
+    .svc-name { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; margin-bottom: 2px; }
+    .svc-port { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); margin-bottom: 10px; }
+    .svc-routes { display: flex; flex-direction: column; gap: 3px; }
+    .rt { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; padding: 2px 6px; border-radius: 4px; border-left: 2px solid; }
+    .rt-post  { border-color: var(--green);  color: var(--green);  background: rgba(16,185,129,0.06); }
+    .rt-get   { border-color: var(--cyan);   color: var(--cyan);   background: rgba(6,182,212,0.06); }
+    .rt-patch { border-color: var(--amber);  color: var(--amber);  background: rgba(245,158,11,0.06); }
+    .rt-event { border-color: var(--rabbit); color: var(--rabbit); background: rgba(255,107,53,0.06); }
+    .svc-auth     { border-color: rgba(139,92,246,0.4); } .svc-auth     .svc-name { color: var(--purple); }
+    .svc-order    { border-color: rgba(16,185,129,0.4); } .svc-order    .svc-name { color: var(--green); }
+    .svc-delivery { border-color: rgba(6,182,212,0.4);  } .svc-delivery .svc-name { color: var(--cyan); }
+    .svc-notif    { border-color: rgba(245,158,11,0.4); } .svc-notif    .svc-name { color: var(--amber); }
+    .svc-pharmacy { border-color: rgba(236,72,153,0.4); } .svc-pharmacy .svc-name { color: var(--pink); }
+
+    /* DB */
+    .db-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 8px; }
+    .db { background: #080e1a; border: 1px dashed var(--border); border-radius: 10px; padding: 10px; text-align: center; }
+    .db-icon { font-size: 14px; margin-bottom: 4px; }
+    .db-name { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--muted); }
+    .db-port { font-family: 'JetBrains Mono', monospace; font-size: 8px; color: var(--border2); margin-top: 2px; }
+
+    /* EVENTS SECTION */
+    .events-section { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; align-items: start; margin-top: 24px; }
+
+    /* RABBITMQ */
+    .rabbitmq { background: #130a04; border: 1px solid rgba(255,107,53,0.4); border-radius: 14px; padding: 20px; box-shadow: 0 0 30px rgba(255,107,53,0.05); }
+    .rmq-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .rmq-icon { font-size: 20px; }
+    .rmq-name { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--rabbit); }
+    .rmq-sub { font-size: 10px; color: var(--muted); }
+    .rmq-exchanges { display: flex; flex-direction: column; gap: 8px; }
+    .exchange { background: rgba(255,107,53,0.05); border: 1px solid rgba(255,107,53,0.15); border-radius: 8px; padding: 8px 12px; }
+    .exchange-name { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; color: var(--rabbit); margin-bottom: 4px; }
+    .exchange-type { font-family: 'JetBrains Mono', monospace; font-size: 8px; color: var(--muted); margin-bottom: 6px; }
+    .exchange-events { display: flex; flex-wrap: wrap; gap: 4px; }
+    .ev { font-family: 'JetBrains Mono', monospace; font-size: 8px; color: var(--rabbit); background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.2); padding: 2px 7px; border-radius: 20px; }
+
+    /* COMM TABLE */
+    .comm-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; overflow: hidden; }
+    .comm-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; color: var(--bright); margin-bottom: 14px; letter-spacing: 0.05em; }
+    table { width: 100%; border-collapse: collapse; }
+    th { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+    td { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text); padding: 7px 10px; border-bottom: 1px solid rgba(26,40,64,0.5); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.015); }
+    .from-badge, .to-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 8px; font-weight: 600; white-space: nowrap; }
+    .badge-auth     { background: rgba(139,92,246,0.15); color: var(--purple); }
+    .badge-order    { background: rgba(16,185,129,0.15);  color: var(--green); }
+    .badge-delivery { background: rgba(6,182,212,0.15);   color: var(--cyan); }
+    .badge-notif    { background: rgba(245,158,11,0.15);  color: var(--amber); }
+    .badge-pharmacy { background: rgba(236,72,153,0.15);  color: var(--pink); }
+    .badge-all      { background: rgba(255,107,53,0.15);  color: var(--rabbit); }
+    .badge-gw       { background: rgba(14,165,233,0.15);  color: var(--blue); }
+    .type-http  { color: var(--blue); }
+    .type-event { color: var(--rabbit); }
+    .event-name { color: var(--rabbit); background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.2); padding: 1px 6px; border-radius: 10px; display: inline-block; white-space: nowrap; }
+
+    /* FOOTER */
+    .footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+    .legend-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .footer-right { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="header-tag">// system design</div>
+    <div class="header-title">Medication Delivery Platform</div>
+    <div class="header-sub">Microservices architecture — full service communication map</div>
+  </div>
+
+  <!-- 01 CLIENT -->
+  <div class="section">
+    <div class="layer-label">01 — client layer</div>
+    <div class="client-box">
+      <div class="client">
+        <div class="client-icon">📱</div>
+        <div>
+          <div class="client-label">Client Application</div>
+          <div class="client-sub">Mobile App / Web Browser</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="conn-line"></div>
+    <div class="conn-label">HTTPS / REST</div>
+    <div class="conn-line"></div>
+    <div class="conn-arrow"></div>
+  </div>
+
+  <!-- 02 GATEWAY -->
+  <div class="section">
+    <div class="layer-label">02 — gateway layer</div>
+    <div class="gateway-wrap">
+      <div class="gateway">
+        <div class="gateway-badge">SINGLE PUBLIC ENTRY POINT</div>
+        <div class="gateway-name">api-gateway</div>
+        <div class="gateway-port">localhost:3000</div>
+        <div class="gateway-features">
+          <div class="gf-tag">JWT verification</div>
+          <div class="gf-tag">request routing</div>
+          <div class="gf-tag">rate limiting</div>
+          <div class="gf-tag">x-user header injection</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <svg class="fanout-svg" height="48" viewBox="0 0 1200 48" preserveAspectRatio="none">
+    <defs>
+      <marker id="a1" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L6,3 z" fill="#1a2840"/>
+      </marker>
+    </defs>
+    <line x1="600" y1="0" x2="600" y2="20" stroke="#1a2840" stroke-width="1"/>
+    <line x1="110" y1="20" x2="1090" y2="20" stroke="#1a2840" stroke-width="1"/>
+    <line x1="110"  y1="20" x2="110"  y2="48" stroke="#1a2840" stroke-width="1" marker-end="url(#a1)"/>
+    <line x1="330"  y1="20" x2="330"  y2="48" stroke="#1a2840" stroke-width="1" marker-end="url(#a1)"/>
+    <line x1="600"  y1="20" x2="600"  y2="48" stroke="#1a2840" stroke-width="1" marker-end="url(#a1)"/>
+    <line x1="870"  y1="20" x2="870"  y2="48" stroke="#1a2840" stroke-width="1" marker-end="url(#a1)"/>
+    <line x1="1090" y1="20" x2="1090" y2="48" stroke="#1a2840" stroke-width="1" marker-end="url(#a1)"/>
+  </svg>
+
+  <!-- 03 SERVICES -->
+  <div class="section">
+    <div class="layer-label">03 — service layer</div>
+    <div class="services-grid">
+      <div class="svc svc-auth">
+        <div class="svc-status status-done">✓ DONE</div>
+        <div class="svc-icon">🔐</div>
+        <div class="svc-name">auth-service</div>
+        <div class="svc-port">:3001</div>
+        <div class="svc-routes">
+          <div class="rt rt-post">POST /register</div>
+          <div class="rt rt-post">POST /login</div>
+          <div class="rt rt-post">POST /refresh</div>
+          <div class="rt rt-post">POST /logout</div>
+          <div class="rt rt-get">GET  /me</div>
+          <div class="rt rt-get">GET  /health</div>
+        </div>
+      </div>
+      <div class="svc svc-order">
+        <div class="svc-status status-next">NEXT</div>
+        <div class="svc-icon">📋</div>
+        <div class="svc-name">order-service</div>
+        <div class="svc-port">:3002</div>
+        <div class="svc-routes">
+          <div class="rt rt-post">POST /orders</div>
+          <div class="rt rt-get">GET  /orders/me</div>
+          <div class="rt rt-get">GET  /orders/:id</div>
+          <div class="rt rt-patch">PATCH /:id/status</div>
+          <div class="rt rt-get">GET  /health</div>
+        </div>
+      </div>
+      <div class="svc svc-delivery">
+        <div class="svc-status status-wip">PLANNED</div>
+        <div class="svc-icon">🚚</div>
+        <div class="svc-name">delivery-service</div>
+        <div class="svc-port">:3003</div>
+        <div class="svc-routes">
+          <div class="rt rt-post">POST /deliveries</div>
+          <div class="rt rt-get">GET  /deliveries/:id</div>
+          <div class="rt rt-patch">PATCH /:id/location</div>
+          <div class="rt rt-patch">PATCH /:id/status</div>
+          <div class="rt rt-get">GET  /health</div>
+        </div>
+      </div>
+      <div class="svc svc-notif">
+        <div class="svc-status status-wip">PLANNED</div>
+        <div class="svc-icon">🔔</div>
+        <div class="svc-name">notification-service</div>
+        <div class="svc-port">:3004</div>
+        <div class="svc-routes">
+          <div class="rt rt-event">CONSUMES order.#</div>
+          <div class="rt rt-event">CONSUMES delivery.#</div>
+          <div class="rt rt-event">CONSUMES user.#</div>
+          <div class="rt rt-get">GET  /health</div>
+        </div>
+      </div>
+      <div class="svc svc-pharmacy">
+        <div class="svc-status status-wip">PLANNED</div>
+        <div class="svc-icon">💊</div>
+        <div class="svc-name">pharmacy-service</div>
+        <div class="svc-port">:3005</div>
+        <div class="svc-routes">
+          <div class="rt rt-get">GET  /pharmacies</div>
+          <div class="rt rt-get">GET  /medications</div>
+          <div class="rt rt-patch">PATCH /validate/:id</div>
+          <div class="rt rt-get">GET  /health</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <svg class="fanout-svg" height="24" viewBox="0 0 1200 24" preserveAspectRatio="none">
+    <defs>
+      <marker id="a2" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L6,3 z" fill="#243550"/>
+      </marker>
+    </defs>
+    <line x1="110"  y1="0" x2="110"  y2="24" stroke="#243550" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#a2)"/>
+    <line x1="330"  y1="0" x2="330"  y2="24" stroke="#243550" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#a2)"/>
+    <line x1="600"  y1="0" x2="600"  y2="24" stroke="#243550" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#a2)"/>
+    <line x1="870"  y1="0" x2="870"  y2="24" stroke="#243550" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#a2)"/>
+    <line x1="1090" y1="0" x2="1090" y2="24" stroke="#243550" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#a2)"/>
+  </svg>
+
+  <!-- 04 DATABASES -->
+  <div class="section">
+    <div class="layer-label">04 — data layer</div>
+    <div class="db-grid">
+      <div class="db">
+        <div class="db-icon">🗄️</div>
+        <div class="db-name" style="color:var(--purple)">auth-db</div>
+        <div class="db-name">PostgreSQL</div>
+        <div class="db-port">:5433</div>
+      </div>
+      <div class="db">
+        <div class="db-icon">🗄️</div>
+        <div class="db-name" style="color:var(--green)">order-db</div>
+        <div class="db-name">PostgreSQL</div>
+        <div class="db-port">:5434</div>
+      </div>
+      <div class="db">
+        <div class="db-icon">🗄️</div>
+        <div class="db-name" style="color:var(--cyan)">delivery-db</div>
+        <div class="db-name">PostgreSQL</div>
+        <div class="db-port">:5435</div>
+      </div>
+      <div class="db" style="opacity:0.3">
+        <div class="db-icon">∅</div>
+        <div class="db-name">no database</div>
+        <div class="db-name">event-driven only</div>
+        <div class="db-port">—</div>
+      </div>
+      <div class="db">
+        <div class="db-icon">🗄️</div>
+        <div class="db-name" style="color:var(--pink)">pharmacy-db</div>
+        <div class="db-name">PostgreSQL</div>
+        <div class="db-port">:5436</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 05 MESSAGING + COMMS -->
+  <div class="section" style="margin-top:24px;">
+    <div class="layer-label">05 — messaging layer & all service communications</div>
+    <div class="events-section">
+
+      <div class="rabbitmq">
+        <div class="rmq-header">
+          <div class="rmq-icon">🐇</div>
+          <div>
+            <div class="rmq-name">RabbitMQ</div>
+            <div class="rmq-sub">Message broker · :5672 · UI :15672</div>
+          </div>
+        </div>
+        <div class="rmq-exchanges">
+          <div class="exchange">
+            <div class="exchange-name">user.events</div>
+            <div class="exchange-type">type: topic · durable: true</div>
+            <div class="exchange-events">
+              <div class="ev">user.registered</div>
+              <div class="ev">user.verified</div>
+            </div>
+          </div>
+          <div class="exchange">
+            <div class="exchange-name">order.events</div>
+            <div class="exchange-type">type: topic · durable: true</div>
+            <div class="exchange-events">
+              <div class="ev">order.created</div>
+              <div class="ev">order.status.prescription_approved</div>
+              <div class="ev">order.status.ready_for_pickup</div>
+              <div class="ev">order.status.in_delivery</div>
+              <div class="ev">order.status.delivered</div>
+              <div class="ev">order.status.cancelled</div>
+            </div>
+          </div>
+          <div class="exchange">
+            <div class="exchange-name">delivery.events</div>
+            <div class="exchange-type">type: topic · durable: true</div>
+            <div class="exchange-events">
+              <div class="ev">delivery.assigned</div>
+              <div class="ev">delivery.location.updated</div>
+              <div class="ev">delivery.completed</div>
+              <div class="ev">delivery.failed</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="comm-table-wrap">
+        <div class="comm-title">// all service communications</div>
+        <table>
+          <thead>
+            <tr>
+              <th>FROM</th>
+              <th>TO</th>
+              <th>TYPE</th>
+              <th>EVENT / ENDPOINT</th>
+              <th>TRIGGER</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="from-badge badge-gw">gateway</span></td>
+              <td><span class="to-badge badge-all">all services</span></td>
+              <td><span class="type-http">HTTP proxy</span></td>
+              <td>x-user header forwarded</td>
+              <td>Every authenticated request</td>
+            </tr>
+            <tr>
+              <td><span class="from-badge badge-auth">auth</span></td>
+              <td><span class="to-badge badge-all">all services</span></td>
+              <td><span class="type-event">event</span></td>
+              <td><span class="event-name">user.registered</span></td>
+              <td>New user signs up</td>
+            </tr>
+            <tr>
+              <td><span class="from-badge badge-order">order</span></td>
+              <td><span class="to-badge badge-pharmacy">pharmacy</span></td>
+              <td><span class="type-event">event</span></td>
+              <td><span class="event-name">order.created</span></td>
+              <td>Patient places an order</td>
+            </tr>
+            <tr>
+              <td><span class="from-badge badge-pharmacy">pharmacy</span></td>
+              <td><span class="to-badge badge-order">order</span></td>
+              <td><span class="type-event">event</span></td>
+              <td><span class="event-name">order.status.prescription_approved</span></td>
+              <td>Pharmacist validates prescription</td>
+            </tr>
+            <tr>
+              <td><span class="from-badge badge-pharmacy">pharmacy</span></td>
+              <td><span class="to-badge badge-delivery">delivery</span></td>
+              <td><span class="type-event">event</span></td>
+              <td><span class="event-name">order.status.ready_for_pickup</span></td>
+              <td>Order packed, driver needed</td>
+            </tr>
+            <tr>
+              <td><span class="from-badge badge-delivery">delivery</span></td>
+              <td><span class="to-badge badge-order">order</span></td>
+              <td><span class="type-event">event</span></td>
+              <td><span class="event-name">order.status.in_delivery</span></td>
+              <td>Driver picks up from pharmacy</td>
+            </tr>
+            <tr>
+              <td><span class="from-badge badge-delivery">delivery</span></td>
+              <td><span class="to-badge badge-order">order</span></td>
+              <td><span class="type-event">event</span></td>
+              <td><span class="event-name">order.status.delivered</span></td>
+              <td>Driver delivers to patient</td>
+            </tr>
+            <tr>
+              <td><span class="from-badge badge-delivery">delivery</span></td>
+              <td><span class="to-badge badge-notif">notification</span></td>
+              <td><span class="type-event">event</span></td>
+              <td><span class="event-name">delivery.location.updated</span></td>
+              <td>Driver updates GPS every 30s</td>
+            </tr>
+            <tr>
+              <td><span class="from-badge badge-order">order</span></td>
+              <td><span class="to-badge badge-notif">notification</span></td>
+              <td><span class="type-event">event</span></td>
+              <td><span class="event-name">order.status.*</span></td>
+              <td>Any order status change</td>
+            </tr>
+            <tr>
+              <td><span class="from-badge badge-notif">notification</span></td>
+              <td>Patient device</td>
+              <td><span class="type-http">push / SMS</span></td>
+              <td>Firebase FCM · AWS SNS</td>
+              <td>Any consumed event</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>auth-service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>order-service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--cyan)"></div>delivery-service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>notification-service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--pink)"></div>pharmacy-service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--rabbit)"></div>RabbitMQ events</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>HTTP / REST</div>
+    <div class="footer-right">medication-delivery · v1.0 · microservices</div>
+  </div>
+
+</div>
+</body>
+</html>

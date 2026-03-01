@@ -1,0 +1,72 @@
+version: '3.9'
+
+services:
+
+  # Database for auth-service
+  auth-db:
+    image: postgres:15-alpine
+    container_name: auth-db
+    environment:
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+      POSTGRES_DB: auth_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+
+  # Database for order-service
+  order-db:
+    image: postgres:15-alpine
+    container_name: order-db
+    environment:
+      POSTGRES_USER: order_user
+      POSTGRES_PASSWORD: order_pass
+      POSTGRES_DB: order_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - order-db-data:/var/lib/postgresql/data
+
+  # Database for delivery-service
+  delivery-db:
+    image: postgres:15-alpine
+    container_name: delivery-db
+    environment:
+      POSTGRES_USER: delivery_user
+      POSTGRES_PASSWORD: delivery_pass
+      POSTGRES_DB: delivery_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - delivery-db-data:/var/lib/postgresql/data
+
+  # Database for pharmacy
+  pharmacy-db:
+    image: postgres:15-alpine
+    container_name: pharmacy-db
+    environment:
+      POSTGRES_USER: pharmacy_user
+      POSTGRES_PASSWORD: pharmacy_pass
+      POSTGRES_DB: pharmacy_db
+    ports:
+      - "5436:5432"
+    volumes:
+      - pharmacy-db-data:/var/lib/postgresql/data
+
+  # Message broker — used by all services to communicate
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbit_user
+      RABBITMQ_DEFAULT_PASS: rabbit_pass
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # Management UI → http://localhost:15672
+
+volumes:
+  auth-db-data:
+  order-db-data:
+  delivery-db-data:
+  pharmacy-db-data:

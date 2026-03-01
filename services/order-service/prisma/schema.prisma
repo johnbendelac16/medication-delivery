@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING_PRESCRIPTION    // waiting for pharmacist to validate prescription
+  PRESCRIPTION_APPROVED   // pharmacist approved, preparing order
+  READY_FOR_PICKUP        // ready for driver to pick up
+  IN_DELIVERY             // driver picked up, en route to patient
+  DELIVERED               // delivered and signed by patient
+  CANCELLED               // cancelled at any stage
+}
+
+// Main order — created by a patient
+model Order {
+  id              String      @id @default(uuid())
+  patientId       String      // references User.id in auth-service
+  pharmacyId      String      // references Pharmacy in pharmacy-service
+  status          OrderStatus @default(PENDING_PRESCRIPTION)
+  prescriptionUrl String?     // S3 URL of the uploaded prescription image
+  notes           String?
+  items           OrderItem[]
+  events          OrderEvent[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("orders")
+}
+
+// Each medication line in the order
+model OrderItem {
+  id           String @id @default(uuid())
+  orderId      String
+  order        Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  medicationId String
+  name         String
+  quantity     Int
+  unitPrice    Float
+
+  @@map("order_items")
+}
+
+// Append-only audit log — every status change is recorded, nothing is ever deleted
+// This is critical for medical traceability
+model OrderEvent {
+  id        String      @id @default(uuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  actorId   String      // userId who triggered the change
+  note      String?
+  createdAt DateTime    @default(now())
+
+  @@map("order_events")
+}

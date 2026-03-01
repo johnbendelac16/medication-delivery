@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Medication Delivery — Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Space+Grotesk:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --border: #1e2d45;
+      --accent: #00d4ff;
+      --accent2: #7c3aed;
+      --accent3: #10b981;
+      --accent4: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --rabbit: #ff6b35;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', sans-serif;
+      min-height: 100vh;
+      padding: 40px 20px;
+      overflow-x: hidden;
+    }
+
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--accent);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 48px;
+    }
+
+    .diagram {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* ── CLIENT ── */
+    .client {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 32px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .client span {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* ── ARROWS ── */
+    .arrow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 0;
+    }
+
+    .arrow-line {
+      width: 2px;
+      height: 32px;
+      background: linear-gradient(to bottom, var(--accent), var(--accent2));
+    }
+
+    .arrow-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    .arrow-tip {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 8px solid var(--accent2);
+    }
+
+    /* ── API GATEWAY ── */
+    .gateway {
+      background: linear-gradient(135deg, #0f1f35, #162035);
+      border: 1px solid var(--accent);
+      border-radius: 16px;
+      padding: 20px 40px;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 0 30px rgba(0,212,255,0.1), inset 0 1px 0 rgba(0,212,255,0.1);
+      min-width: 320px;
+    }
+
+    .gateway::before {
+      content: 'ENTRY POINT';
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: var(--bg);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      padding: 2px 10px;
+      border-radius: 4px;
+    }
+
+    .gateway-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .gateway-port {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .gateway-desc {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* ── SERVICES ROW ── */
+    .services-row {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* ── FANOUT ARROWS ── */
+    .fanout {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0 0;
+      width: 100%;
+      position: relative;
+    }
+
+    .fanout-line {
+      width: 2px;
+      height: 20px;
+      background: var(--border);
+      margin-bottom: 0;
+    }
+
+    .fanout-horizontal {
+      height: 2px;
+      background: var(--border);
+      width: 80%;
+      max-width: 760px;
+    }
+
+    .fanout-drops {
+      display: flex;
+      justify-content: space-around;
+      width: 80%;
+      max-width: 760px;
+    }
+
+    .fanout-drop {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .fanout-drop-line {
+      width: 2px;
+      height: 20px;
+      background: var(--border);
+    }
+
+    .fanout-drop-tip {
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    /* ── SERVICE CARD ── */
+    .service {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      min-width: 160px;
+      text-align: center;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+
+    .service:hover {
+      box-shadow: 0 0 20px rgba(0,212,255,0.08);
+    }
+
+    .service-icon {
+      font-size: 22px;
+      margin-bottom: 8px;
+    }
+
+    .service-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .service-port {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .service-routes {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      text-align: left;
+    }
+
+    .route {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: var(--muted);
+      background: rgba(255,255,255,0.03);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border-left: 2px solid;
+    }
+
+    .route.post { border-color: #10b981; color: #10b981; }
+    .route.get  { border-color: #00d4ff; color: #00d4ff; }
+    .route.patch{ border-color: #f59e0b; color: #f59e0b; }
+
+    /* ── DB ROW ── */
+    .db-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .db {
+      background: #0d1520;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 10px 16px;
+      text-align: center;
+      min-width: 130px;
+    }
+
+    .db-icon { font-size: 16px; margin-bottom: 4px; }
+
+    .db-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    /* ── RABBITMQ ── */
+    .rabbitmq-section {
+      background: #1a0e05;
+      border: 1px solid var(--rabbit);
+      border-radius: 16px;
+      padding: 16px 32px;
+      text-align: center;
+      box-shadow: 0 0 20px rgba(255,107,53,0.08);
+      min-width: 320px;
+    }
+
+    .rabbitmq-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--rabbit);
+      margin-bottom: 4px;
+    }
+
+    .rabbitmq-desc {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .events {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    .event-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: var(--rabbit);
+      background: rgba(255,107,53,0.1);
+      border: 1px solid rgba(255,107,53,0.3);
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+
+    /* ── LEGEND ── */
+    .legend {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    /* colors per service */
+    .auth    { border-color: #7c3aed; }
+    .auth    .service-name { color: #7c3aed; }
+    .order   { border-color: #10b981; }
+    .order   .service-name { color: #10b981; }
+    .delivery{ border-color: #00d4ff; }
+    .delivery .service-name { color: #00d4ff; }
+    .notif   { border-color: #f59e0b; }
+    .notif   .service-name { color: #f59e0b; }
+    .pharmacy{ border-color: #ec4899; }
+    .pharmacy .service-name { color: #ec4899; }
+
+    .status-badge {
+      position: absolute;
+      top: -8px;
+      right: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.1em;
+    }
+
+    .done { background: #10b981; color: #000; }
+    .wip  { background: #f59e0b; color: #000; }
+  </style>
+</head>
+<body>
+
+<div class="diagram">
+
+  <h1>// architecture overview</h1>
+  <div class="subtitle">Medication Delivery — Microservices</div>
+
+  <!-- CLIENT -->
+  <div class="client"><span>Client</span> — Mobile / Web App</div>
+
+  <!-- ARROW DOWN -->
+  <div class="arrow">
+    <div class="arrow-label">HTTPS</div>
+    <div class="arrow-line"></div>
+    <div class="arrow-tip"></div>
+  </div>
+
+  <!-- API GATEWAY -->
+  <div class="gateway">
+    <div class="gateway-title">API Gateway</div>
+    <div class="gateway-port">:3000</div>
+    <div class="gateway-desc">JWT verification · routing · rate limiting</div>
+  </div>
+
+  <!-- FANOUT -->
+  <div class="fanout">
+    <div class="fanout-line"></div>
+    <div class="fanout-horizontal"></div>
+    <div class="fanout-drops">
+      <div class="fanout-drop"><div class="fanout-drop-line"></div><div class="fanout-drop-tip"></div></div>
+      <div class="fanout-drop"><div class="fanout-drop-line"></div><div class="fanout-drop-tip"></div></div>
+      <div class="fanout-drop"><div class="fanout-drop-line"></div><div class="fanout-drop-tip"></div></div>
+      <div class="fanout-drop"><div class="fanout-drop-line"></div><div class="fanout-drop-tip"></div></div>
+      <div class="fanout-drop"><div class="fanout-drop-line"></div><div class="fanout-drop-tip"></div></div>
+    </div>
+  </div>
+
+  <!-- SERVICES -->
+  <div class="services-row">
+
+    <div class="service auth">
+      <div class="status-badge done">✓ DONE</div>
+      <div class="service-icon">🔐</div>
+      <div class="service-name">auth-service</div>
+      <div class="service-port">:3001</div>
+      <div class="service-routes">
+        <div class="route post">POST /register</div>
+        <div class="route post">POST /login</div>
+        <div class="route post">POST /refresh</div>
+        <div class="route post">POST /logout</div>
+        <div class="route get">GET  /me</div>
+      </div>
+    </div>
+
+    <div class="service order">
+      <div class="status-badge wip">NEXT</div>
+      <div class="service-icon">📋</div>
+      <div class="service-name">order-service</div>
+      <div class="service-port">:3002</div>
+      <div class="service-routes">
+        <div class="route post">POST /orders</div>
+        <div class="route get">GET  /orders/me</div>
+        <div class="route get">GET  /orders/:id</div>
+        <div class="route patch">PATCH /orders/:id/status</div>
+      </div>
+    </div>
+
+    <div class="service delivery">
+      <div class="service-icon">🚚</div>
+      <div class="service-name">delivery-service</div>
+      <div class="service-port">:3003</div>
+      <div class="service-routes">
+        <div class="route post">POST /deliveries</div>
+        <div class="route get">GET  /deliveries/:id</div>
+        <div class="route patch">PATCH /deliveries/:id</div>
+      </div>
+    </div>
+
+    <div class="service notif">
+      <div class="service-icon">🔔</div>
+      <div class="service-name">notification-service</div>
+      <div class="service-port">:3004</div>
+      <div class="service-routes">
+        <div class="route get">GET  /health</div>
+        <div class="route" style="border-color:#f59e0b;color:#f59e0b;">EVENT consumer only</div>
+      </div>
+    </div>
+
+    <div class="service pharmacy">
+      <div class="service-icon">💊</div>
+      <div class="service-name">pharmacy-service</div>
+      <div class="service-port">:3005</div>
+      <div class="service-routes">
+        <div class="route get">GET  /pharmacies</div>
+        <div class="route get">GET  /medications</div>
+        <div class="route patch">PATCH /validate</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- DB ARROWS -->
+  <div class="fanout" style="padding-top:12px;">
+    <div class="fanout-horizontal" style="width:70%"></div>
+    <div class="fanout-drops" style="width:70%">
+      <div class="fanout-drop"><div class="fanout-drop-line"></div><div class="fanout-drop-tip"></div></div>
+      <div class="fanout-drop"><div class="fanout-drop-line"></div><div class="fanout-drop-tip"></div></div>
+      <div class="fanout-drop"><div class="fanout-drop-line"></div><div class="fanout-drop-tip"></div></div>
+      <div class="fanout-drop" style="opacity:0.2"><div class="fanout-drop-line"></div><div class="fanout-drop-tip"></div></div>
+      <div class="fanout-drop"><div class="fanout-drop-line"></div><div class="fanout-drop-tip"></div></div>
+    </div>
+  </div>
+
+  <!-- DATABASES -->
+  <div class="db-row">
+    <div class="db">
+      <div class="db-icon">🗄️</div>
+      <div class="db-name" style="color:#7c3aed">auth-db</div>
+      <div class="db-name">PostgreSQL :5433</div>
+    </div>
+    <div class="db">
+      <div class="db-icon">🗄️</div>
+      <div class="db-name" style="color:#10b981">order-db</div>
+      <div class="db-name">PostgreSQL :5434</div>
+    </div>
+    <div class="db">
+      <div class="db-icon">🗄️</div>
+      <div class="db-name" style="color:#00d4ff">delivery-db</div>
+      <div class="db-name">PostgreSQL :5435</div>
+    </div>
+    <div class="db" style="opacity:0.3">
+      <div class="db-icon">—</div>
+      <div class="db-name">no DB</div>
+      <div class="db-name">events only</div>
+    </div>
+    <div class="db">
+      <div class="db-icon">🗄️</div>
+      <div class="db-name" style="color:#ec4899">pharmacy-db</div>
+      <div class="db-name">PostgreSQL :5436</div>
+    </div>
+  </div>
+
+  <!-- RABBITMQ ARROW -->
+  <div class="arrow" style="margin-top:24px;">
+    <div class="arrow-label">async events</div>
+    <div class="arrow-line" style="background: linear-gradient(to bottom, #ff6b35, #ff6b35)"></div>
+    <div class="arrow-tip" style="border-top-color: #ff6b35"></div>
+  </div>
+
+  <!-- RABBITMQ -->
+  <div class="rabbitmq-section">
+    <div class="rabbitmq-title">🐇 RabbitMQ</div>
+    <div class="rabbitmq-desc">Message broker — async communication between services</div>
+    <div class="events">
+      <div class="event-tag">user.registered</div>
+      <div class="event-tag">order.created</div>
+      <div class="event-tag">order.status.*</div>
+      <div class="event-tag">delivery.updated</div>
+      <div class="event-tag">prescription.validated</div>
+    </div>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> auth-service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> order-service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#00d4ff"></div> delivery-service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> notification-service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ec4899"></div> pharmacy-service</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ff6b35"></div> RabbitMQ events</div>
+  </div>
+
+</div>
+
+</body>
+</html>
