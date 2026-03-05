@@ -12,65 +12,207 @@ env:
   PROJECT_NAME: medication-delivery
 
 jobs:
-  # ─── Build and Push all Docker images ───────────────────────────────────────
-  build-and-push:
-    name: Build & Push ${{ matrix.service }}
+
+  # ─── Detect which services changed ──────────────────────────────────────────
+  changes:
+    name: Detect changes
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        include:
-          - service: api-gateway
-            context: ./api-gateway
-          - service: auth-service
-            context: ./services/auth-service
-          - service: order-service
-            context: ./services/order-service
-          - service: delivery-service
-            context: ./services/delivery-service
-          - service: notification-service
-            context: ./services/notification-service
-          - service: pharmacy-service
-            context: ./services/pharmacy-service
-          - service: frontend
-            context: ./frontend
+    outputs:
+      api-gateway:          ${{ steps.filter.outputs.api-gateway }}
+      auth-service:         ${{ steps.filter.outputs.auth-service }}
+      order-service:        ${{ steps.filter.outputs.order-service }}
+      delivery-service:     ${{ steps.filter.outputs.delivery-service }}
+      notification-service: ${{ steps.filter.outputs.notification-service }}
+      pharmacy-service:     ${{ steps.filter.outputs.pharmacy-service }}
+      frontend:             ${{ steps.filter.outputs.frontend }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Detect changed files
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api-gateway:
+              - 'api-gateway/**'
+            auth-service:
+              - 'services/auth-service/**'
+            order-service:
+              - 'services/order-service/**'
+            delivery-service:
+              - 'services/delivery-service/**'
+            notification-service:
+              - 'services/notification-service/**'
+            pharmacy-service:
+              - 'services/pharmacy-service/**'
+            frontend:
+              - 'frontend/**'
+
+  build-api-gateway:
+    name: Build & Push api-gateway
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.api-gateway == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.context }}
-          push: ${{ github.event_name == 'push' }}  # Only push on main, not PRs
+          context: ./api-gateway
+          push: ${{ github.event_name == 'push' }}
           tags: |
-            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/${{ matrix.service }}:latest
-            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/${{ matrix.service }}:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/api-gateway:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/api-gateway:${{ github.sha }}
 
-  # ─── Notify on success ───────────────────────────────────────────────────────
-  notify:
-    name: Notify deployment
+  build-auth-service:
+    name: Build & Push auth-service
     runs-on: ubuntu-latest
-    needs: build-and-push
-    if: github.event_name == 'push'
+    needs: changes
+    if: needs.changes.outputs.auth-service == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./services/auth-service
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/auth-service:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/auth-service:${{ github.sha }}
 
+  build-order-service:
+    name: Build & Push order-service
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.order-service == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./services/order-service
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/order-service:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/order-service:${{ github.sha }}
+
+  build-delivery-service:
+    name: Build & Push delivery-service
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.delivery-service == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./services/delivery-service
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/delivery-service:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/delivery-service:${{ github.sha }}
+
+  build-notification-service:
+    name: Build & Push notification-service
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.notification-service == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./services/notification-service
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/notification-service:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/notification-service:${{ github.sha }}
+
+  build-pharmacy-service:
+    name: Build & Push pharmacy-service
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pharmacy-service == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./services/pharmacy-service
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/pharmacy-service:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/pharmacy-service:${{ github.sha }}
+
+  build-frontend:
+    name: Build & Push frontend
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/frontend:latest
+            ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}/frontend:${{ github.sha }}
+
+  notify:
+    name: Summary
+    runs-on: ubuntu-latest
+    needs:
+      - build-api-gateway
+      - build-auth-service
+      - build-order-service
+      - build-delivery-service
+      - build-notification-service
+      - build-pharmacy-service
+      - build-frontend
+    if: always() && github.event_name == 'push'
     steps:
       - name: Summary
         run: |
-          echo "## ✅ Deployment successful" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 CI/CD Complete" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Images pushed to ECR:** 7" >> $GITHUB_STEP_SUMMARY
+          echo "Only modified services were rebuilt." >> $GITHUB_STEP_SUMMARY
