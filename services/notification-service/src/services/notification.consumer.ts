@@ -47,6 +47,10 @@ const handleEvent = (routingKey: string, payload: any): void => {
       // TODO: broadcast via WebSocket to patient's app for live tracking
       break
 
+    case 'delivery.in_transit':
+    console.log(`🔔 [PUSH] Patient: Your order is on its way!`)
+    break
+    
     case 'delivery.delivered':
       console.log(`✅ [PUSH] Order ${payload.orderId} successfully delivered`)
       break

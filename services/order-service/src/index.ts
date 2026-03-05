@@ -4,6 +4,7 @@ import morgan from 'morgan'
 import orderRoutes from './routes/order.routes'
 import { connectRabbitMQ } from './config/rabbitmq'
 import prisma from './config/prisma'
+import { startOrderConsumer } from './services/order.consumer'
 
 dotenv.config()
 
@@ -22,6 +23,7 @@ const start = async () => {
     await prisma.$connect()
     console.log('✅ PostgreSQL connected')
     await connectRabbitMQ()
+    await startOrderConsumer()
     app.listen(PORT, () => console.log(`🚀 order-service running on port ${PORT}`))
   } catch (error) {
     console.error('❌ Failed to start:', error)

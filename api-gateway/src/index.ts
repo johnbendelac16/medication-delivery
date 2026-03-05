@@ -2,11 +2,21 @@ import express, { Request, Response, NextFunction } from 'express'
 import httpProxy from 'http-proxy'
 import jwt from 'jsonwebtoken'
 import morgan from 'morgan'
+import cors from 'cors'
 import dotenv from 'dotenv'
 
 dotenv.config()
 
 const app = express()
+
+// Allow requests from the frontend
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}))
+
 app.use(morgan('dev'))
 
 const proxy = httpProxy.createProxyServer({})
@@ -38,25 +48,22 @@ const authenticate = (req: Request, res: Response, next: NextFunction): void => 
   }
 }
 
-// Strip the full /api/xxx prefix and forward to service
-// /api/auth/login → /auth/login (keeps the service prefix)
-const forward = (target: string, apiPrefix: string, servicePrefix: string) => {
+const forward = (target: string) => {
   return (req: Request, res: Response) => {
-    const url = req.originalUrl.replace(apiPrefix, servicePrefix)
-    console.log(`Forwarding: ${req.originalUrl} → ${target}${url}`)
+    const url = req.originalUrl.replace(/^\/api/, '')
     req.url = url
     proxy.web(req, res, { target })
   }
 }
 
 // PUBLIC
-app.use('/api/auth',          forward(SERVICES.auth,         '/api/auth',          '/auth'))
+app.use('/api/auth',          forward(SERVICES.auth))
 
 // PROTECTED
-app.use('/api/orders',        authenticate, forward(SERVICES.order,        '/api/orders',        '/orders'))
-app.use('/api/deliveries',    authenticate, forward(SERVICES.delivery,     '/api/deliveries',    '/deliveries'))
-app.use('/api/notifications', authenticate, forward(SERVICES.notification, '/api/notifications', '/notifications'))
-app.use('/api/pharmacies',    authenticate, forward(SERVICES.pharmacy,     '/api/pharmacies',    '/pharmacies'))
+app.use('/api/orders',        authenticate, forward(SERVICES.order))
+app.use('/api/deliveries',    authenticate, forward(SERVICES.delivery))
+app.use('/api/notifications', authenticate, forward(SERVICES.notification))
+app.use('/api/pharmacies',    authenticate, forward(SERVICES.pharmacy))
 
 app.use((_, res) => res.status(404).json({ message: 'Route not found' }))
 
