@@ -4,6 +4,7 @@ import morgan from 'morgan'
 import pharmacyRoutes from './routes/pharmacy.routes'
 import { connectRabbitMQ } from './config/rabbitmq'
 import prisma from './config/prisma'
+import redis from './config/redis'
 
 dotenv.config()
 
@@ -21,6 +22,7 @@ const start = async () => {
   try {
     await prisma.$connect()
     console.log('✅ PostgreSQL connected')
+    await redis.ping()
     await connectRabbitMQ()
     app.listen(PORT, () => console.log(`🚀 pharmacy-service running on port ${PORT}`))
   } catch (error) {

@@ -2,12 +2,11 @@ import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
-// Axios instance with base URL
 const api = axios.create({
   baseURL: API_URL
 })
 
-// Automatically attach JWT token to every request
+// Attach JWT token to every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('accessToken')
   if (token) {
@@ -16,15 +15,76 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// If token is expired (401), redirect to login
+// Track if we're already refreshing to avoid infinite loops
+let isRefreshing = false
+let failedQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = []
+
+const processQueue = (error: unknown, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) prom.reject(error)
+    else prom.resolve(token!)
+  })
+  failedQueue = []
+}
+
+// Auto-refresh access token when it expires
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      window.location.href = '/login'
+  async (error) => {
+    const originalRequest = error.config
+
+    // If 401 and we haven't retried yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      const refreshToken = localStorage.getItem('refreshToken')
+
+      // No refresh token — redirect to login
+      if (!refreshToken) {
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+        window.location.href = '/login'
+        return Promise.reject(error)
+      }
+
+      if (isRefreshing) {
+        // Queue the request until refresh is done
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        }).then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`
+          return api(originalRequest)
+        })
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      try {
+        // Call refresh endpoint
+        const res = await axios.post(`${API_URL}/api/auth/refresh`, { refreshToken })
+        const { accessToken, refreshToken: newRefreshToken } = res.data
+
+        // Store new tokens
+        localStorage.setItem('accessToken', accessToken)
+        localStorage.setItem('refreshToken', newRefreshToken)
+
+        // Retry all queued requests with new token
+        processQueue(null, accessToken)
+
+        // Retry original request
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`
+        return api(originalRequest)
+      } catch (refreshError) {
+        // Refresh failed — logout
+        processQueue(refreshError, null)
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+        window.location.href = '/login'
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
+      }
     }
+
     return Promise.reject(error)
   }
 )
@@ -33,10 +93,10 @@ api.interceptors.response.use(
 export const authApi = {
   register: (data: { email: string; password: string; role: string }) =>
     api.post('/api/auth/register', data),
-
   login: (data: { email: string; password: string }) =>
     api.post('/api/auth/login', data),
-
+  refresh: (refreshToken: string) =>
+    api.post('/api/auth/refresh', { refreshToken }),
   me: () => api.get('/api/auth/me')
 }
 
@@ -76,6 +136,7 @@ export interface UpdateDeliveryStatusDto {
   latitude?: number
   longitude?: number
 }
+
 export const deliveriesApi = {
   create: (data: CreateDeliveryDto) => api.post('/api/deliveries', data),
   getById: (id: string) => api.get(`/api/deliveries/${id}`),
