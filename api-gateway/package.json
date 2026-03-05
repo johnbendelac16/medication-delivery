@@ -16,6 +16,7 @@
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "http-proxy": "^1.18.1",
+    "ioredis": "^5.10.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1"
   },
@@ -23,6 +24,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/http-proxy": "^1.17.17",
+    "@types/ioredis": "^4.28.10",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/node": "^25.3.1",

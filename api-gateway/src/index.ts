@@ -4,12 +4,12 @@ import jwt from 'jsonwebtoken'
 import morgan from 'morgan'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import { authLimiter, globalLimiter } from './middleware/rateLimiter'
 
 dotenv.config()
 
 const app = express()
 
-// Allow requests from the frontend
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'],
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
@@ -18,6 +18,9 @@ app.use(cors({
 }))
 
 app.use(morgan('dev'))
+
+// Global rate limit — 100 requests/minute for all routes
+app.use(globalLimiter)
 
 const proxy = httpProxy.createProxyServer({})
 
@@ -56,8 +59,10 @@ const forward = (target: string) => {
   }
 }
 
-// PUBLIC
-app.use('/api/auth',          forward(SERVICES.auth))
+// PUBLIC — strict rate limit on auth endpoints
+app.use('/api/auth/login',    authLimiter, forward(SERVICES.auth))
+app.use('/api/auth/register', authLimiter, forward(SERVICES.auth))
+app.use('/api/auth',                       forward(SERVICES.auth))
 
 // PROTECTED
 app.use('/api/orders',        authenticate, forward(SERVICES.order))
