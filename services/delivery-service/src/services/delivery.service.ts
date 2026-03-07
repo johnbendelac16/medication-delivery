@@ -1,12 +1,9 @@
 import prisma from '../config/prisma'
 import { publishEvent } from '../config/rabbitmq'
+import { publishGPS } from '../config/redis'
 import { CreateDeliveryDto, DeliveryStatus, UpdateLocationDto, UpdateStatusDto } from '../types/delivery.types'
 
 export class DeliveryService {
-
-  // ─── Create Delivery ──────────────────────────────────────────────────────
-  // Called when pharmacy marks order as READY_FOR_PICKUP
-  // Assigns a driver to the order
 
   async createDelivery(dto: CreateDeliveryDto) {
     const delivery = await prisma.delivery.create({
@@ -33,8 +30,6 @@ export class DeliveryService {
     return delivery
   }
 
-  // ─── Get Delivery by ID ───────────────────────────────────────────────────
-
   async getDeliveryById(deliveryId: string) {
     const delivery = await prisma.delivery.findUnique({
       where: { id: deliveryId },
@@ -44,8 +39,6 @@ export class DeliveryService {
     return delivery
   }
 
-  // ─── Get Delivery by Order ID ─────────────────────────────────────────────
-
   async getDeliveryByOrderId(orderId: string) {
     const delivery = await prisma.delivery.findUnique({
       where: { orderId },
@@ -54,9 +47,6 @@ export class DeliveryService {
     if (!delivery) throw new Error('Delivery not found for this order')
     return delivery
   }
-
-  // ─── Update Location ──────────────────────────────────────────────────────
-  // Called every 30 seconds by the driver's mobile app to update GPS position
 
   async updateLocation(deliveryId: string, dto: UpdateLocationDto) {
     const delivery = await prisma.delivery.update({
@@ -75,7 +65,14 @@ export class DeliveryService {
       }
     })
 
-    // Notify notification-service so patient can see driver position in real time
+    // Publish to Redis Pub/Sub → WebSocket → patient sees position in real time
+    await publishGPS(
+      delivery.orderId,
+      delivery.driverId,
+      dto.latitude,
+      dto.longitude
+    )
+
     publishEvent('delivery.location.updated', {
       deliveryId: delivery.id,
       orderId: delivery.orderId,
@@ -85,9 +82,6 @@ export class DeliveryService {
 
     return delivery
   }
-
-  // ─── Update Status ────────────────────────────────────────────────────────
-  // Driver updates status: PICKED_UP → IN_TRANSIT → DELIVERED or FAILED
 
   async updateStatus(deliveryId: string, dto: UpdateStatusDto) {
     const delivery = await prisma.delivery.update({
@@ -108,7 +102,6 @@ export class DeliveryService {
       include: { events: { orderBy: { createdAt: 'asc' } } }
     })
 
-    // Notify order-service and notification-service of the status change
     publishEvent(`delivery.${dto.status.toLowerCase()}`, {
       deliveryId: delivery.id,
       orderId: delivery.orderId,

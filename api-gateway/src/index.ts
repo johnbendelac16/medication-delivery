@@ -5,6 +5,8 @@ import morgan from 'morgan'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { authLimiter, globalLimiter } from './middleware/rateLimiter'
+import { createServer } from 'http'
+import { initWebSocket } from './websocket'
 
 dotenv.config()
 
@@ -20,7 +22,11 @@ app.use(cors({
 app.use(morgan('dev'))
 
 // Global rate limit — 100 requests/minute for all routes
-app.use(globalLimiter)
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'api-gateway' }))
+app.use((req, res, next) => {
+  if (req.headers.upgrade === 'websocket') return next()
+  globalLimiter(req, res, next)
+})
 
 const proxy = httpProxy.createProxyServer({})
 
@@ -73,4 +79,6 @@ app.use('/api/pharmacies',    authenticate, forward(SERVICES.pharmacy))
 app.use((_, res) => res.status(404).json({ message: 'Route not found' }))
 
 const PORT = process.env.PORT || 3000
-app.listen(PORT, () => console.log(`🚀 api-gateway running on port ${PORT}`))
+const server = createServer(app)
+initWebSocket(server)
+server.listen(PORT, () => console.log(`🚀 api-gateway running on port ${PORT}`))
